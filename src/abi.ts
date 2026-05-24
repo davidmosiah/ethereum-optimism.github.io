@@ -42,3 +42,30 @@ export const TOKEN_ABI = [
     type: 'function',
   },
 ]
+
+export const L2_STANDARD_ERC20_ABI = [
+  {
+    inputs: [],
+    name: 'l1Token',
+    outputs: [
+      {
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'l2Bridge',
+    outputs: [
+      {
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+]

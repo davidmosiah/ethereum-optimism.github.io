@@ -1,5 +1,3 @@
-import { ethers } from 'ethers'
-
 import { Chain, L1Chain, L2Chain, Network } from './types'
 import { createRobustProvider, getRpcUrls } from './providerFactory'
 

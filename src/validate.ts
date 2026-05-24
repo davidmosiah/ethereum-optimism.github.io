@@ -9,10 +9,13 @@ import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 import { schema } from '@uniswap/token-lists'
 import { ethers } from 'ethers'
-import { sleep } from '@eth-optimism/core-utils'
-import { getContractInterface } from '@eth-optimism/contracts'
 
 import { generate } from './generate'
+import { L2_STANDARD_ERC20_ABI, TOKEN_ABI } from './abi'
+
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 /**
  * Retry a contract call with exponential backoff
@@ -45,7 +48,6 @@ import {
   L2_TO_L1_PAIR,
   NETWORK_DATA,
 } from './chains'
-import { TOKEN_ABI } from './abi'
 import {
   Chain,
   ExpectedMismatches,
@@ -152,7 +154,7 @@ export const validate = async (
         )
 
         // Check that the token exists on this chain
-        if ((await contract.provider.getCode(token.address)) === '0x') {
+        if ((await networkData.provider.getCode(token.address)) === '0x') {
           results.push({
             type: 'error',
             message: `${folder} on chain ${chain} token ${token.address} does not exist`,
@@ -162,7 +164,9 @@ export const validate = async (
         // Check that the token has the correct decimals
         if (token.overrides?.decimals === undefined) {
           try {
-            const contractDecimals = await retryContractCall(() => contract.decimals())
+            const contractDecimals = Number(
+              await retryContractCall(() => contract.decimals())
+            )
             if (data.decimals !== contractDecimals) {
               results.push({
                 type: 'error',
@@ -252,7 +256,7 @@ export const validate = async (
               try {
                 const tokenContract = new ethers.Contract(
                   token.address,
-                  getContractInterface('L2StandardERC20'),
+                  L2_STANDARD_ERC20_ABI,
                   networkData.provider
                 )
 

@@ -2,14 +2,9 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 
-import {
-  BaseServiceV2,
-  ExpressRouter,
-  validators,
-} from '@eth-optimism/common-ts'
 import { Octokit } from 'octokit'
 import extract from 'extract-zip'
-import uuid from 'uuid'
+const express = require('express')
 
 import { version } from '../package.json'
 
@@ -25,33 +20,19 @@ type TState = {
   gh: Octokit
 }
 
-export class Bot extends BaseServiceV2<TOptions, TMetrics, TState> {
+export class Bot {
+  options: TOptions
+  metrics: TMetrics = {}
+  state = {} as TState
+  logger = console
+
   constructor(options?: Partial<TOptions>) {
-    super({
-      name: 'token-list-bot',
-      version,
-      options,
-      optionsSpec: {
-        secret: {
-          secret: true,
-          desc: 'secret used to check webhook validity',
-          validator: validators.str,
-        },
-        pat: {
-          secret: true,
-          desc: 'personal access token for github',
-          validator: validators.str,
-        },
-        tempdir: {
-          desc: 'temporary directory for storing files',
-          validator: validators.str,
-          default: './tmp',
-        },
-      },
-      metricsSpec: {
-        // ...
-      },
-    })
+    this.options = {
+      secret: process.env.WEBHOOK_SECRET || process.env.SECRET || '',
+      pat: process.env.GITHUB_TOKEN || process.env.GH_PAT || '',
+      tempdir: './tmp',
+      ...options,
+    }
   }
 
   async init(): Promise<void> {
@@ -65,9 +46,9 @@ export class Bot extends BaseServiceV2<TOptions, TMetrics, TState> {
     }
   }
 
-  async routes(router: ExpressRouter): Promise<void> {
+  async routes(router: any): Promise<void> {
     router.post('/webhook', async (req: any, res: any) => {
-      const id = uuid.v4()
+      const id = crypto.randomUUID()
       try {
         // We'll need this later
         const owner = 'ethereum-optimism'
@@ -82,7 +63,7 @@ export class Bot extends BaseServiceV2<TOptions, TMetrics, TState> {
         )
 
         // Check that the HMAC is valid
-        if (!crypto.timingSafeEqual(digest, sig)) {
+        if (sig.length !== digest.length || !crypto.timingSafeEqual(digest, sig)) {
           return res
             .status(200)
             .json({ ok: false, message: 'invalid signature on workflow' })
@@ -227,6 +208,24 @@ export class Bot extends BaseServiceV2<TOptions, TMetrics, TState> {
 
   async main(): Promise<void> {
     // nothing to do here
+  }
+
+  async run(): Promise<void> {
+    await this.init()
+    const app = express()
+    app.use(
+      express.json({
+        verify: (req: any, _res: any, buf: Buffer) => {
+          req.rawBody = buf
+        },
+      })
+    )
+    await this.routes(app)
+    await this.main()
+    const port = Number(process.env.PORT || 7300)
+    app.listen(port, () => {
+      this.logger.log(`token-list-bot ${version} listening on ${port}`)
+    })
   }
 }
 

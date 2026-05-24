@@ -1,4 +1,4 @@
-import { providers } from 'ethers'
+import { Provider } from 'ethers'
 
 export interface Token {
   address: string
@@ -100,6 +100,6 @@ export interface ValidationResult {
 export interface Network {
   id: number
   name: string
-  provider: providers.BaseProvider
+  provider: Provider
   layer: number
 }

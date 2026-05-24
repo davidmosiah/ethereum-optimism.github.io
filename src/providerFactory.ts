@@ -1,4 +1,9 @@
-import { ethers } from 'ethers'
+import {
+    AbstractProvider,
+    FallbackProvider,
+    JsonRpcProvider,
+    Networkish
+} from 'ethers'
 import { Chain } from './types'
 
 interface ProviderConfig {
@@ -17,65 +22,41 @@ const DEFAULT_CONFIG: ProviderConfig = {
  * Custom provider that tries multiple RPC endpoints sequentially
  * Returns the first successful response, skipping failed endpoints
  */
-class SequentialFallbackProvider extends ethers.providers.StaticJsonRpcProvider {
-    private providers: ethers.providers.StaticJsonRpcProvider[]
-
-    constructor(providers: ethers.providers.StaticJsonRpcProvider[]) {
-        // Initialize with the first provider's connection info
-        super(providers[0].connection, providers[0].network)
-        this.providers = providers
-    }
-
-    async perform(method: string, params: any): Promise<any> {
-        let lastError: Error | null = null
-
-        // Try each provider sequentially
-        for (const provider of this.providers) {
-            try {
-                const result = await provider.perform(method, params)
-                return result
-            } catch (error: any) {
-                lastError = error
-                // Continue to next provider
-                continue
-            }
-        }
-
-        // If all providers failed, throw the last error
-        throw lastError || new Error('All RPC endpoints failed')
-    }
-}
-
 /**
  * Creates a robust provider with timeout, retry, and fallback capabilities
  */
 export const createRobustProvider = (
     urls: string | string[],
-    networkish?: ethers.providers.Networkish,
+    networkish?: Networkish,
     config: ProviderConfig = {}
-): ethers.providers.BaseProvider => {
+): AbstractProvider => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config }
     const urlArray = Array.isArray(urls) ? urls : [urls]
 
     // Single provider with timeout
     if (urlArray.length === 1) {
-        return new ethers.providers.StaticJsonRpcProvider({
-            url: urlArray[0],
-            timeout: finalConfig.timeout,
-            throttleLimit: finalConfig.throttleLimit
-        }, networkish)
+        return new JsonRpcProvider(urlArray[0], networkish, {
+            staticNetwork: true
+        })
     }
 
     // Multiple providers with sequential fallback
     const providers = urlArray.map(url =>
-        new ethers.providers.StaticJsonRpcProvider({
-            url,
-            timeout: finalConfig.timeout,
-            throttleLimit: finalConfig.throttleLimit
-        }, networkish)
+        new JsonRpcProvider(url, networkish, {
+            staticNetwork: true
+        })
     )
 
-    return new SequentialFallbackProvider(providers)
+    return new FallbackProvider(
+        providers.map((provider, index) => ({
+            provider,
+            priority: index + 1,
+            stallTimeout: finalConfig.timeout,
+            weight: 1
+        })),
+        networkish,
+        { quorum: 1 }
+    )
 }
 
 /**
